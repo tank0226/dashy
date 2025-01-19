@@ -28,7 +28,7 @@ export const sanitize = (string) => {
 export const timestampToDate = (timestamp) => {
   const localFormat = navigator.language;
   const dateFormat = {
-    weekday: 'short', day: 'numeric', month: 'short', year: '2-digit',
+    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
   };
   const date = new Date(timestamp).toLocaleDateString(localFormat, dateFormat);
   return `${date}`;
@@ -46,6 +46,12 @@ export const timestampToDateTime = (timestamp) => {
   return `${timestampToDate(timestamp)} at ${timestampToTime(timestamp)}`;
 };
 
+/* Given a 2-letter country ISO code, return the countries name */
+export const getCountryFromIso = (iso) => {
+  const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+  return regionNames.of(iso);
+};
+
 /* Given a 2-digit country code, return path to flag image from Flagpedia */
 export const getCountryFlag = (countryCode, dimens) => {
   const protocol = 'https';
@@ -58,8 +64,8 @@ export const getCountryFlag = (countryCode, dimens) => {
 
 /* Given a currency code, return path to corresponding countries flag icon */
 export const getCurrencyFlag = (currency) => {
-  const cdn = 'https://raw.githubusercontent.com/transferwise/currency-flags';
-  return `${cdn}/master/src/flags/${currency.toLowerCase()}.png`;
+  const cdn = 'https://raw.githubusercontent.com/Lissy93/currency-flags';
+  return `${cdn}/master/assets/flags_png_rectangle/${currency.toLowerCase()}.png`;
 };
 
 /* Given a Latitude & Longitude object, and optional zoom level, return link to OSM */
@@ -75,7 +81,8 @@ export const getPlaceUrl = (placeName) => {
 /* Given a large number, will add commas to make more readable */
 export const putCommasInBigNum = (bigNum) => {
   const strNum = Number.isNaN(bigNum) ? bigNum : String(bigNum);
-  return strNum.replace(/\B(?=(?:\d{3})+(?!\d))/g, ',');
+  const [integerPart, decimalPart] = strNum.split('.');
+  return integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (decimalPart ? `.${decimalPart}` : '');
 };
 
 /* Given a large number, will convert 1000 into k for readability */
@@ -97,6 +104,18 @@ export const convertBytes = (bytes, decimals = 2) => {
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / (k ** i)).toFixed(decimals))} ${sizes[i]}`;
+};
+
+/* Round a number to thousands, millions, billions or trillions and suffix
+ * with K, M, B or T respectively, e.g. 4_294_967_295 => 4.3B */
+export const formatNumber = (number, decimals = 1) => {
+  if (number > -1000 && number < 1000) return number;
+  const units = ['', 'K', 'M', 'B', 'T'];
+  const k = 1000;
+  const i = Math.floor(Math.log(number) / Math.log(k));
+  const f = parseFloat(number / (k ** i));
+  const d = f.toFixed(decimals) % 1.0 === 0 ? 0 : decimals; // number of decimals, omit .0
+  return `${f.toFixed(d)}${units[i]}`;
 };
 
 /* Round price to appropriate number of decimals */
@@ -122,26 +141,53 @@ export const getTimeDifference = (startTime, endTime) => {
   const msDifference = new Date(endTime).getTime() - new Date(startTime).getTime();
   const diff = Math.abs(Math.round(msDifference / 1000));
   const divide = (time, round) => Math.round(time / round);
-  if (diff < 60) return `${divide(diff, 1)} seconds`;
-  if (diff < 3600) return `${divide(diff, 60)} minutes`;
-  if (diff < 86400) return `${divide(diff, 3600)} hours`;
-  if (diff < 604800) return `${divide(diff, 86400)} days`;
-  if (diff >= 604800) return `${divide(diff, 604800)} weeks`;
+
+  const periods = [
+    { noun: 'second', value: 1 },
+    { noun: 'minute', value: 60 },
+    { noun: 'hour', value: 3600 },
+    { noun: 'day', value: 86400 },
+    { noun: 'week', value: 604800 },
+    { noun: 'fortnight', value: 1209600 },
+    { noun: 'month', value: 2628000 },
+    { noun: 'year', value: 31557600 },
+  ];
+
+  for (let idx = 0; idx < periods.length; idx += 1) {
+    if (diff < (periods[idx + 1]?.value ?? Infinity)) {
+      const period = periods[idx];
+      const value = divide(diff, period.value);
+      const noun = value === 1 ? period.noun : `${period.noun}s`;
+      return `${value} ${noun}`;
+    }
+  }
+
   return 'unknown';
 };
 
 /* Given a timestamp, return how long ago it was, e.g. '10 minutes' */
 export const getTimeAgo = (dateTime) => {
   const now = new Date().getTime();
+  const isHistorical = new Date(dateTime).getTime() < now;
   const diffStr = getTimeDifference(dateTime, now);
   if (diffStr === 'unknown') return diffStr;
-  return `${diffStr} ago`;
+  return isHistorical ? `${diffStr} ago` : `in ${diffStr}`;
 };
 
 /* Given the name of a CSS variable, returns it's value */
 export const getValueFromCss = (colorVar) => {
   const cssProps = getComputedStyle(document.documentElement);
   return cssProps.getPropertyValue(`--${colorVar}`).trim();
+};
+
+/* Given a temperature in Celsius, returns value in Fahrenheit */
+export const celsiusToFahrenheit = (celsius) => {
+  return Math.round((celsius * 1.8) + 32);
+};
+
+/* Given a temperature in Fahrenheit, returns value in Celsius */
+export const fahrenheitToCelsius = (fahrenheit) => {
+  return Math.round(((fahrenheit - 32) * 5) / 9);
 };
 
 /* Given a currency code, return the corresponding unicode symbol */

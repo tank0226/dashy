@@ -19,7 +19,6 @@ import WebContent from '@/components/Workspace/WebContent';
 import WidgetView from '@/components/Workspace/WidgetView';
 import MultiTaskingWebComtent from '@/components/Workspace/MultiTaskingWebComtent';
 import Defaults from '@/utils/defaults';
-import { GetTheme, ApplyLocalTheme, ApplyCustomVariables } from '@/utils/ThemeHelper';
 
 export default {
   name: 'Workspace',
@@ -27,9 +26,6 @@ export default {
   data: () => ({
     url: '',
     widgets: null,
-    GetTheme,
-    ApplyLocalTheme,
-    ApplyCustomVariables,
   }),
   computed: {
     sections() {
@@ -61,11 +57,6 @@ export default {
       this.url = '';
       this.widgets = widgets;
     },
-    setTheme() {
-      const theme = this.GetTheme();
-      this.ApplyLocalTheme(theme);
-      this.ApplyCustomVariables(theme);
-    },
     initiateFontAwesome() {
       const fontAwesomeScript = document.createElement('script');
       const faKey = this.appConfig.fontAwesomeKey || Defaults.fontAwesomeKey;
@@ -94,6 +85,9 @@ export default {
 
 <style scoped lang="scss">
 .work-space {
-  min-height: calc(100vh - var(--footer-height));
+  min-height: fit-content;
+}
+:global(footer) {
+  display: none;
 }
 </style>

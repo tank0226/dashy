@@ -1,7 +1,7 @@
 <template>
   <transition name="slide">
     <div class="context-menu" v-if="show && !isMenuDisabled"
-      :style="posX && posY ? `top:${posY}px;left:${posX}px;` : ''">
+      :style="posX && posY ? calcPosition() : ''">
       <!-- Open Options -->
       <ul class="menu-section">
         <li @click="openSection()">
@@ -11,6 +11,10 @@
         <li @click="openEditSectionMenu">
           <EditIcon />
           <span>{{ $t('context-menus.section.edit-section') }}</span>
+        </li>
+        <li @click="expandCollapseSection">
+          <ExpandCollapseIcon />
+          <span>{{ $t('context-menus.section.expand-collapse') }}</span>
         </li>
         <li v-if="isEditMode" @click="removeSection">
           <BinIcon />
@@ -26,6 +30,7 @@
 import EditIcon from '@/assets/interface-icons/config-edit-json.svg';
 import BinIcon from '@/assets/interface-icons/interactive-editor-remove.svg';
 import SameTabOpenIcon from '@/assets/interface-icons/open-current-tab.svg';
+import ExpandCollapseIcon from '@/assets/interface-icons/section-expand-collapse.svg';
 
 export default {
   name: 'ContextMenu',
@@ -33,6 +38,7 @@ export default {
     EditIcon,
     BinIcon,
     SameTabOpenIcon,
+    ExpandCollapseIcon,
   },
   props: {
     posX: Number, // The X coordinate for positioning
@@ -56,8 +62,18 @@ export default {
     openEditSectionMenu() {
       this.$emit('openEditSection');
     },
+    expandCollapseSection() {
+      this.$emit('expandCollapseSection');
+    },
     removeSection() {
       this.$emit('removeSection');
+    },
+    calcPosition() {
+      const bounds = this.$parent.$el.getBoundingClientRect();
+      const left = this.posX < (bounds.right + bounds.left) / 2;
+      const position = `top:${this.posY}px;${left ? 'left' : 'right'}:\
+        ${left ? this.posX : document.documentElement.clientWidth - this.posX}px;`;
+      return position;
     },
   },
 };

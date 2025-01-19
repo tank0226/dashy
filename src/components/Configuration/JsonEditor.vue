@@ -1,5 +1,5 @@
 <template>
-  <div class="json-editor-outer">
+  <div class="json-editor-outer" v-if="allowViewConfig">
     <!-- Main JSON editor -->
     <v-jsoneditor v-model="jsonData" :options="options" />
     <!-- Options raido, and save button -->
@@ -8,11 +8,11 @@
       :label="$t('config-editor.save-location-label')"
       :options="saveOptions"
       :initialOption="initialSaveMode"
-      :disabled="!allowWriteToDisk"
+      :disabled="!allowWriteToDisk || !allowSaveLocally"
       />
     <!-- Save Buttons -->
     <div :class="`btn-container ${!isValid ? 'err' : ''}`">
-      <Button :click="save">
+      <Button :click="save" :disallow="!allowWriteToDisk && !allowSaveLocally">
         {{ $t('config-editor.save-button') }}
       </Button>
       <Button :click="startPreview">
@@ -46,28 +46,29 @@
     </p>
     <p class="note">{{ $t('config.backup-note') }}</p>
   </div>
+  <AccessError v-else />
 </template>
 
 <script>
 
-import axios from 'axios';
-import ProgressBar from 'rsup-progress';
 import VJsoneditor from 'v-jsoneditor';
-import jsYaml from 'js-yaml';
-import ErrorHandler, { InfoHandler, InfoKeys } from '@/utils/ErrorHandler';
+import ConfigSavingMixin from '@/mixins/ConfigSaving';
+import { InfoHandler, InfoKeys } from '@/utils/ErrorHandler';
 import configSchema from '@/utils/ConfigSchema.json';
 import StoreKeys from '@/utils/StoreMutations';
-import { localStorageKeys, serviceEndpoints, modalNames } from '@/utils/defaults';
-import { isUserAdmin } from '@/utils/Auth';
+import { modalNames } from '@/utils/defaults';
 import Button from '@/components/FormElements/Button';
 import Radio from '@/components/FormElements/Radio';
+import AccessError from '@/components/Configuration/AccessError';
 
 export default {
   name: 'JsonEditor',
+  mixins: [ConfigSavingMixin],
   components: {
     VJsoneditor,
     Button,
     Radio,
+    AccessError,
   },
   data() {
     return {
@@ -81,9 +82,6 @@ export default {
         name: 'config',
         onValidationError: this.validationErrors,
       },
-      responseText: '',
-      saveSuccess: undefined,
-      progress: new ProgressBar({ color: 'var(--progress-bar)' }),
       saveOptions: [
         { label: this.$t('config-editor.location-disk-label'), value: 'file' },
         { label: this.$t('config-editor.location-local-label'), value: 'local' },
@@ -97,25 +95,39 @@ export default {
     isValid() {
       return this.errorMessages.length < 1;
     },
+    permissions() {
+      // Returns: { allowWriteToDisk, allowSaveLocally, allowViewConfig }
+      return this.$store.getters.permissions;
+    },
     allowWriteToDisk() {
-      const { appConfig } = this.config;
-      return appConfig.allowConfigEdit !== false && isUserAdmin();
+      return this.permissions.allowWriteToDisk;
+    },
+    allowSaveLocally() {
+      return this.permissions.allowSaveLocally;
+    },
+    allowViewConfig() {
+      return this.permissions.allowViewConfig;
     },
     initialSaveMode() {
-      return this.allowWriteToDisk ? 'file' : 'local';
+      if (this.allowWriteToDisk) return 'file';
+      if (this.allowSaveLocally) return 'local';
+      return '';
     },
   },
   mounted() {
-    this.jsonData = this.config;
+    const jsonData = { ...this.config };
+    jsonData.sections = (jsonData.sections || []).map(({ filteredItems, ...section }) => section);
+    if (!jsonData.pageInfo) jsonData.pageInfo = { title: 'Dashy' };
+    this.jsonData = jsonData;
     if (!this.allowWriteToDisk) this.saveMode = 'local';
   },
   methods: {
     /* Calls appropriate save method, based on save-type radio selected */
     save() {
       if (this.saveMode === 'local' || !this.allowWriteToDisk) {
-        this.saveConfigLocally();
+        this.saveLocally();
       } else if (this.saveMode === 'file') {
-        this.writeConfigToDisk();
+        this.writeToDisk();
       } else {
         this.$toasted.show(this.$t('config-editor.error-msg-save-mode'));
       }
@@ -131,63 +143,19 @@ export default {
       this.$store.commit(StoreKeys.SET_EDIT_MODE, true);
       this.$modal.hide(modalNames.CONF_EDITOR);
     },
-    /* Converts config to YAML, and writes it to disk */
-    writeConfigToDisk() {
-      // 1. Convert JSON into YAML
-      const yaml = jsYaml.dump(this.config);
-      // 2. Prepare the request
-      const baseUrl = process.env.VUE_APP_DOMAIN || window.location.origin;
-      const endpoint = `${baseUrl}${serviceEndpoints.save}`;
-      const headers = { 'Content-Type': 'text/plain' };
-      const body = { config: yaml, timestamp: new Date() };
-      const request = axios.post(endpoint, body, headers);
-      // 3. Make the request, and handle response
-      this.progress.start();
-      request.then((response) => {
-        this.saveSuccess = response.data.success || false;
-        this.responseText = response.data.message;
-        if (this.saveSuccess) {
-          this.carefullyClearLocalStorage();
-          this.showToast(this.$t('config-editor.success-msg-disk'), true);
-        } else {
-          this.showToast(this.$t('config-editor.error-msg-cannot-save'), false);
-        }
-        InfoHandler('Config has been written to disk succesfully', InfoKeys.RAW_EDITOR);
-        this.$store.commit(StoreKeys.SET_CONFIG, this.jsonData);
-        this.progress.end();
-      })
-        .catch((error) => {
-          this.saveSuccess = false;
-          this.responseText = error;
-          this.showToast(error, false);
-          ErrorHandler(`Failed to save config. ${error}`);
-          this.progress.end();
-        });
+    writeToDisk() {
+      const newData = this.jsonData;
+      this.writeConfigToDisk(newData);
+      // this.$store.commit(StoreKeys.SET_APP_CONFIG, newData.appConfig);
+      this.$store.commit(StoreKeys.SET_PAGE_INFO, newData.pageInfo);
+      this.$store.commit(StoreKeys.SET_SECTIONS, newData.sections);
     },
-    /* Saves config to local browser storage */
-    saveConfigLocally() {
-      const data = this.jsonData;
-      if (data.sections) {
-        localStorage.setItem(localStorageKeys.CONF_SECTIONS, JSON.stringify(data.sections));
+    saveLocally() {
+      const msg = this.$t('interactive-editor.menu.save-locally-warning');
+      const youSure = confirm(msg); // eslint-disable-line no-alert, no-restricted-globals
+      if (youSure) {
+        this.saveConfigLocally(this.jsonData);
       }
-      if (data.pageInfo) {
-        localStorage.setItem(localStorageKeys.PAGE_INFO, JSON.stringify(data.pageInfo));
-      }
-      if (data.appConfig) {
-        data.appConfig.auth = this.config.appConfig.auth || {};
-        localStorage.setItem(localStorageKeys.APP_CONFIG, JSON.stringify(data.appConfig));
-      }
-      if (data.appConfig.theme) {
-        localStorage.setItem(localStorageKeys.THEME, data.appConfig.theme);
-      }
-      InfoHandler('Config has succesfully been saved in browser storage', InfoKeys.RAW_EDITOR);
-      this.showToast(this.$t('config-editor.success-msg-local'), true);
-    },
-    /* Clears config from browser storage, only removing relevant items  */
-    carefullyClearLocalStorage() {
-      localStorage.removeItem(localStorageKeys.PAGE_INFO);
-      localStorage.removeItem(localStorageKeys.APP_CONFIG);
-      localStorage.removeItem(localStorageKeys.CONF_SECTIONS);
     },
     /* Convert error messages into readable format for UI */
     validationErrors(errors) {
@@ -198,7 +166,7 @@ export default {
             errorMessages.push({
               type: 'validation',
               msg: `${this.$t('config-editor.warning-msg-validation')}: `
-                + `${error.error.keyword} ${error.error.message}`,
+                  + `${(error.error || error).dataPath} ${(error.error || error).message}`,
             });
             break;
           case 'error':
@@ -277,7 +245,7 @@ p.response-output {
 }
 
 p.no-permission-note {
-  color: var(--config-settings-color);
+  color: var(--warning);
 }
 
 .btn-container {

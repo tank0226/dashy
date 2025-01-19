@@ -17,7 +17,7 @@
       :class="`item-group-container ${!tabbedView ? 'showing-all' : ''}`">
       <!-- Section heading buttons -->
       <MinimalHeading
-        v-for="(section, index) in getSections(sections)"
+        v-for="(section, index) in sections"
         :key="`heading-${index}`"
         :index="index"
         :title="section.name"
@@ -29,12 +29,12 @@
       />
       <!-- Section item groups -->
       <MinimalSection
-        v-for="(section, index) in getSections(sections)"
+        v-for="(section, index) in sections"
         :key="`body-${index}`"
         :index="index"
         :title="section.name"
         :icon="section.icon || undefined"
-        :groupId="`section-${index}`"
+        :groupId="makeSectionId(section)"
         :items="filterTiles(section.items)"
         :widgets="section.widgets"
         :selected="selectedSection === index"
@@ -57,8 +57,6 @@ import HomeMixin from '@/mixins/HomeMixin';
 import MinimalSection from '@/components/MinimalView/MinimalSection.vue';
 import MinimalHeading from '@/components/MinimalView/MinimalHeading.vue';
 import MinimalSearch from '@/components/MinimalView/MinimalSearch.vue';
-import { GetTheme, ApplyLocalTheme, ApplyCustomVariables } from '@/utils/ThemeHelper';
-import { localStorageKeys } from '@/utils/defaults';
 import ConfigLauncher from '@/components/Settings/ConfigLauncher';
 
 export default {
@@ -74,10 +72,8 @@ export default {
     layout: '',
     selectedSection: 0, // The index of currently selected section
     tabbedView: true, // By default use tabs, when searching then show all instead
-    theme: GetTheme(),
   }),
   watch: {
-    /* When the theme changes, then call the update method */
     searchValue() {
       this.tabbedView = !this.searchValue || this.searchValue.length === 0;
     },
@@ -86,20 +82,9 @@ export default {
     sectionSelected(index) {
       this.selectedSection = index;
     },
-    /* Returns sections from local storage if available, otherwise uses the conf.yml */
-    getSections(sections) {
-      // If the user has stored sections in local storage, return those
-      const localSections = localStorage[localStorageKeys.CONF_SECTIONS];
-      if (localSections) {
-        const json = JSON.parse(localSections);
-        if (json.length >= 1) return json;
-      }
-      // Otherwise, return the usuall data from conf.yml
-      return sections;
-    },
     /* Clears input field, once a searched item is opened */
     finishedSearching() {
-      this.$refs.filterComp.clearMinFilterInput();
+      if (this.$refs.filterComp) this.$refs.filterComp.clearMinFilterInput();
     },
     /* Returns true if there is more than 1 sub-result visible during searching */
     checkIfResults() {
@@ -121,22 +106,15 @@ export default {
     /* Make CSS styles to apply the users custom background image */
     getBackgroundImage() {
       if (this.appConfig && this.appConfig.backgroundImg) {
-        return `background: url('${this.appConfig.backgroundImg}');background-size:cover;`;
+        return `background: url('${this.appConfig.backgroundImg}') no-repeat center fixed;background-size:cover;`;
       }
       return '';
-    },
-    /* If theme present, then call helper to apply it, and any custom colors */
-    applyTheme() {
-      if (this.theme) {
-        ApplyLocalTheme(this.theme);
-        ApplyCustomVariables(this.theme);
-      }
     },
   },
   mounted() {
     this.initiateFontAwesome();
     this.initiateMaterialDesignIcons();
-    this.applyTheme();
+    this.setTheme();
   },
 };
 </script>

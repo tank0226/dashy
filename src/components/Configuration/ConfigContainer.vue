@@ -1,63 +1,76 @@
 <template>
-  <Tabs :navAuto="true" name="Add Item" ref="tabView">
+  <Tabs :navAuto="true" name="Add Item" ref="tabView" v-bind:class="{ hideTabs: !enableConfig }">
+    <!-- Main tab -->
     <TabItem :name="$t('config.main-tab')" class="main-tab">
       <div class="main-options-container">
         <div class="config-buttons">
           <h2>{{ $t('config.heading') }}</h2>
-          <a class="hyperlink-wrapper"  @click="openExportConfigModal()">
-            <button class="config-button center">
-              <DownloadIcon class="button-icon"/>
-              {{ $t('config.download-config-button') }}
-            </button>
-          </a>
-          <button class="config-button center" @click="() => navigateToTab(1)">
-            <EditIcon class="button-icon"/>
+          <!-- Export config button -->
+          <Button class="config-button" :disallow="!enableConfig" :click="openExportConfigModal">
+            {{ $t('config.download-config-button') }}
+            <DownloadIcon class="button-icon"/>
+          </Button>
+          <!-- Edit config button -->
+          <Button class="config-button" :disallow="!enableConfig" :click="openEditConfigTab">
             {{ $t('config.edit-config-button') }}
-          </button>
-          <button class="config-button center" @click="openLanguageSwitchModal()">
-            <LanguageIcon class="button-icon"/>
+            <EditIcon class="button-icon"/>
+          </Button>
+          <!-- Language switcher button -->
+          <Button class="config-button" :click="openLanguageSwitchModal">
             {{ $t('config.change-language-button') }}
-          </button>
-          <button class="config-button center" @click="() => navigateToTab(3)">
-            <CustomCssIcon class="button-icon"/>
+            <LanguageIcon class="button-icon"/>
+          </Button>
+          <!-- CSS / Styling button -->
+          <Button class="config-button" :disallow="!enableConfig" :click="openEditCssTab">
             {{ $t('config.edit-css-button') }}
-          </button>
-          <button class="config-button center" @click="() => navigateToTab(2)">
-            <CloudIcon class="button-icon"/>
+            <CustomCssIcon class="button-icon"/>
+          </Button>
+          <!-- Cloud sync button -->
+          <Button class="config-button" :disallow="!enableConfig" :click="openCloudSyncTab">
             {{backupId ? $t('config.edit-cloud-sync-button') : $t('config.cloud-sync-button') }}
-          </button>
-          <button class="config-button center" @click="openRebuildAppModal()">
-            <RebuildIcon class="button-icon"/>
+            <CloudIcon class="button-icon"/>
+          </Button>
+          <!-- Rebuild app button -->
+          <Button class="config-button" :disallow="!enableConfig" :click="openRebuildAppModal">
             {{ $t('config.rebuild-app-button') }}
-          </button>
-          <button class="config-button center" @click="resetLocalSettings()">
-            <DeleteIcon class="button-icon"/>
+            <RebuildIcon class="button-icon"/>
+          </Button>
+          <!-- Reset local changes button -->
+          <Button class="config-button" :click="resetLocalSettings">
             {{ $t('config.reset-settings-button') }}
-          </button>
-          <button class="config-button center" @click="openAboutModal()">
-            <IconAbout class="button-icon" />
+            <DeleteIcon class="button-icon"/>
+          </Button>
+          <!-- About modal button -->
+          <Button class="config-button" :click="openAboutModal">
             {{ $t('config.app-info-button') }}
-          </button>
-          <p class="small-screen-note" style="display: none;">
-              You are using a very small screen, and some screens in this menu may not be optimal
-          </p>
+            <IconAbout class="button-icon" />
+          </Button>
+          <!-- Display app version and language -->
           <p class="language">{{ getLanguage() }}</p>
+          <!-- Display location of config file -->
+          <p class="config-location">
+            Using config from
+            <a :href="configPath">{{ configPath }}</a>
+          </p>
           <AppVersion />
         </div>
-        <div class="config-note">
+        <!-- Display note if Config disabled, or if on mobile -->
+        <p v-if="!enableConfig" class="config-disabled-note">{{ $t('config.disabled-note') }}</p>
+        <p class="small-screen-note" style="display: none;">{{ $t('config.small-screen-note') }}</p>
+        <div class="config-note" @click="openExportConfigModal">
           <span>{{ $t('config.backup-note') }}</span>
         </div>
       </div>
       <!-- Rebuild App Modal -->
       <RebuildApp />
     </TabItem>
-    <TabItem :name="$t('config.edit-config-tab')">
+    <TabItem :name="$t('config.edit-config-tab')" v-if="enableConfig">
       <JsonEditor />
     </TabItem>
-    <TabItem :name="$t('cloud-sync.title')">
+    <TabItem :name="$t('cloud-sync.title')" v-if="enableConfig">
       <CloudBackupRestore />
     </TabItem>
-    <TabItem :name="$t('config.custom-css-tab')">
+    <TabItem :name="$t('config.custom-css-tab')" v-if="enableConfig">
       <CustomCssEditor />
     </TabItem>
   </Tabs>
@@ -65,15 +78,16 @@
 
 <script>
 
-import JsonToYaml from '@/utils/JsonToYaml';
 import { localStorageKeys, modalNames } from '@/utils/defaults';
 import { getUsersLanguage } from '@/utils/ConfigHelpers';
+import ErrorHandler from '@/utils/ErrorHandler';
 import StoreKeys from '@/utils/StoreMutations';
 import JsonEditor from '@/components/Configuration/JsonEditor';
 import CustomCssEditor from '@/components/Configuration/CustomCss';
 import CloudBackupRestore from '@/components/Configuration/CloudBackupRestore';
 import RebuildApp from '@/components/Configuration/RebuildApp';
 import AppVersion from '@/components/Configuration/AppVersion';
+import Button from '@/components/FormElements/Button';
 
 import DownloadIcon from '@/assets/interface-icons/config-download-file.svg';
 import DeleteIcon from '@/assets/interface-icons/config-delete-local.svg';
@@ -88,7 +102,6 @@ export default {
   name: 'ConfigContainer',
   data() {
     return {
-      jsonParser: JsonToYaml,
       backupId: localStorage[localStorageKeys.BACKUP_ID] || '',
       appVersion: process.env.VUE_APP_VERSION,
       latestVersion: '',
@@ -101,11 +114,17 @@ export default {
     sections: function getSections() {
       return this.config.sections;
     },
-    yaml() {
-      return this.jsonParser(this.config);
+    enableConfig() {
+      return this.$store.getters.permissions.allowViewConfig;
+    },
+    configPath() {
+      return this.$store.state.currentConfigInfo?.confPath
+      || process.env.VUE_APP_CONFIG_PATH
+      || '/conf.yml';
     },
   },
   components: {
+    Button,
     JsonEditor,
     CustomCssEditor,
     CloudBackupRestore,
@@ -127,7 +146,11 @@ export default {
       this.$refs.tabView.activeTabItem(itemToSelect);
     },
     openRebuildAppModal() {
-      this.$modal.show(modalNames.REBUILD_APP);
+      if (this.enableConfig) {
+        this.$modal.show(modalNames.REBUILD_APP);
+      } else {
+        this.unauthorized();
+      }
     },
     openAboutModal() {
       this.$modal.show(modalNames.ABOUT_APP);
@@ -136,7 +159,20 @@ export default {
       this.$modal.show(modalNames.LANG_SWITCHER);
     },
     openExportConfigModal() {
-      this.$modal.show(modalNames.EXPORT_CONFIG_MENU);
+      if (this.enableConfig) {
+        this.$modal.show(modalNames.EXPORT_CONFIG_MENU);
+      } else {
+        this.unauthorized();
+      }
+    },
+    openEditConfigTab() {
+      this.navigateToTab(1);
+    },
+    openCloudSyncTab() {
+      this.navigateToTab(2);
+    },
+    openEditCssTab() {
+      this.navigateToTab(3);
     },
     /* Checks that the user is sure, then resets site-wide local storage, and reloads page */
     resetLocalSettings() {
@@ -160,6 +196,9 @@ export default {
       if (navToTab && isValidTabIndex(navToTab)) this.navigateToTab(navToTab);
       this.$store.commit(StoreKeys.CONF_MENU_INDEX, undefined);
     },
+    unauthorized() {
+      ErrorHandler('Unauthorized Operation - Config Disabled');
+    },
   },
   mounted() {
     this.navigateToStartingTab();
@@ -180,17 +219,13 @@ pre {
 a.config-button, button.config-button {
   display: flex;
   align-items: center;
-  padding:  0.5rem 1rem;
-  margin: 0.25rem auto;
+  justify-content: flex-end;
   font-size: 1.2rem;
   background: var(--config-settings-background);
   color: var(--config-settings-color);
   border: 1px solid var(--config-settings-color);
-  border-radius: var(--curve-factor);
-  text-decoration: none;
-  cursor: pointer;
   margin: 0.5rem auto;
-  min-width: 18rem;
+  min-width: 15rem;
   width: 100%;
   svg.button-icon {
     path {
@@ -199,9 +234,8 @@ a.config-button, button.config-button {
     width: 1rem;
     height: 1rem;
     padding: 0.2rem;
-    margin-right: 0.5rem;
   }
-  &:hover {
+  &:hover:not(.disallowed) {
     background: var(--config-settings-color);
     color: var(--config-settings-background);
     svg path {
@@ -217,21 +251,19 @@ a.hyperlink-wrapper {
   width: 100%;
 }
 
-p.app-version, p.language {
+p.app-version, p.language, p.config-location {
   margin: 0.5rem auto;
   font-size: 1rem;
-  color: var(--transparent-white-50);
+  color: var(--config-settings-color);
   cursor: default;
+  opacity: var(--dimming-factor);
+  a {
+    color: var(--config-settings-color);
+  }
 }
 
 div.code-container {
   background: var(--config-code-background);
-  #conf-yaml span {
-    font-family: var(--font-monospace), monospace !important;
-    &.hljs-attr {
-      font-weight: bold !important;
-    }
-  }
   .yaml-action-buttons {
     position: absolute;
     top: 1.5rem;
@@ -288,7 +320,7 @@ div.code-container {
   display: flex;
   flex-direction: column;
   background: var(--config-settings-background);
-  height: calc(100% - 2rem);
+  height: calc(100% + 1rem);
   width: fit-content;
   margin: 0 auto;
   padding: 2rem 1rem 0;
@@ -300,13 +332,14 @@ div.code-container {
 
 .config-note {
   width: 80%;
-  bottom: 1rem;
+  max-width: 700px;
   left: 10%;
+  bottom: 1rem;
   margin: 0.5rem auto;
   padding: 0.5rem 0.75rem;
+  text-align: center;
   border: 1px dashed var(--config-settings-color);
   border-radius: var(--curve-factor);
-  text-align: left;
   opacity: var(--dimming-factor);
   color: var(--config-settings-color);
   background: var(--config-settings-background);
@@ -319,6 +352,13 @@ div.code-container {
   &:hover { opacity: 1; }
   display: none;
   @include tablet-up { display: block; }
+}
+p.config-disabled-note {
+  margin: 0.5rem auto;
+  padding: 0 0.5rem;
+  font-weight: bold;
+  color: var(--warning);
+  opacity: var(--dimming-factor);
 }
 p.small-screen-note {
     @include phone {
@@ -334,6 +374,10 @@ p.small-screen-note {
 </style>
 
 <style lang="scss">
+
+.hideTabs .tab__pagination {
+  display: none !important;
+}
 
 .tabs__content {
   height: -webkit-fill-available;
@@ -364,6 +408,9 @@ p.small-screen-note {
         font-weight: bold !important;
         color: var(--config-settings-color) !important;
       }
+      &:hover span {
+        color: var(--config-settings-background) !important;
+      }
     }
   }
   .tab__nav__items .tab__nav__item.active {
@@ -371,13 +418,6 @@ p.small-screen-note {
   }
   hr.tab__slider {
     background: var(--config-settings-color) !important;
-  }
-}
-
-#conf-yaml {
-  background: var(--white);
-  .hljs-attr {
-    color: #9c03f5;
   }
 }
 

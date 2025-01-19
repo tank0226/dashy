@@ -1,5 +1,5 @@
 <template>
-   <Collapsable
+  <Collapsable
     :title="title"
     :icon="icon"
     :uniqueKey="groupId"
@@ -11,6 +11,8 @@
     :cutToHeight="displayData.cutToHeight"
     @openEditSection="openEditSection"
     @openContextMenu="openContextMenu"
+    :id="sectionRef"
+    :ref="sectionRef"
   >
     <!-- If no items, show message -->
     <div v-if="isEmpty" class="no-items">
@@ -21,40 +23,41 @@
       :class="`there-are-items ${isGridLayout? 'item-group-grid': ''} inner-size-${itemSize}`"
       :style="gridStyle" :id="`section-${groupId}`"
     > <!-- Show for each item -->
-      <Item
-        v-for="(item) in sortedItems"
-        :id="item.id"
-        :key="item.id"
-        :url="item.url"
-        :title="item.title"
-        :description="item.description"
-        :icon="item.icon"
-        :target="item.target"
-        :color="item.color"
-        :backgroundColor="item.backgroundColor"
-        :statusCheckUrl="item.statusCheckUrl"
-        :statusCheckHeaders="item.statusCheckHeaders"
-        :itemSize="itemSize"
-        :hotkey="item.hotkey"
-        :provider="item.provider"
-        :parentSectionTitle="title"
-        :enableStatusCheck="item.statusCheck !== undefined ? item.statusCheck : enableStatusCheck"
-        :statusCheckInterval="statusCheckInterval"
-        :statusCheckAllowInsecure="item.statusCheckAllowInsecure"
-        @itemClicked="$emit('itemClicked')"
-        @triggerModal="triggerModal"
-        :isAddNew="false"
-      />
+      <template v-for="(item) in sortedItems">
+        <SubItemGroup
+          v-if="item.subItems"
+          :key="item.id"
+          :itemId="item.id"
+          :title="item.title"
+          :subItems="item.subItems"
+          @triggerModal="triggerModal"
+        />
+        <Item
+          v-else
+          :item="item"
+          :key="item.id"
+          :itemSize="itemSize"
+          :parentSectionTitle="title"
+          @itemClicked="$emit('itemClicked')"
+          @triggerModal="triggerModal"
+          :isAddNew="false"
+          :sectionWidth="sectionWidth"
+          :sectionDisplayData="displayData"
+        />
+      </template>
       <!-- When in edit mode, show additional item, for Add New item -->
       <Item v-if="isEditMode"
+        :item="{
+          icon: ':heavy_plus_sign:',
+          title: 'Add New Item',
+          description: 'Click to add new item',
+          id: 'add-new',
+        }"
         :isAddNew="true"
         :parentSectionTitle="title"
-        icon=":heavy_plus_sign:"
-        id="add-new"
-        title="Add New Item"
-        description="Click to add new item"
         key="add-new"
         class="add-new-item"
+        :sectionWidth="sectionWidth"
         :itemSize="itemSize"
       />
     </div>
@@ -91,6 +94,7 @@
       v-click-outside="closeContextMenu"
       @openEditSection="openEditSection"
       @navigateToSection="navigateToSection"
+      @expandCollapseSection="expandCollapseSection"
       @removeSection="removeSection"
     />
   </Collapsable>
@@ -99,6 +103,7 @@
 <script>
 import router from '@/router';
 import Item from '@/components/LinkItems/Item.vue';
+import SubItemGroup from '@/components/LinkItems/SubItemGroup.vue';
 import WidgetBase from '@/components/Widgets/WidgetBase';
 import Collapsable from '@/components/LinkItems/Collapsable.vue';
 import IframeModal from '@/components/LinkItems/IframeModal.vue';
@@ -128,6 +133,7 @@ export default {
     Collapsable,
     ContextMenu,
     Item,
+    SubItemGroup,
     WidgetBase,
     IframeModal,
     EditSection,
@@ -140,6 +146,8 @@ export default {
         posX: undefined,
         posY: undefined,
       },
+      sectionWidth: 0,
+      resizeObserver: null,
     };
   },
   computed: {
@@ -150,7 +158,7 @@ export default {
       return this.$store.state.editMode;
     },
     itemSize() {
-      return this.$store.getters.iconSize;
+      return this.displayData.itemSize || this.$store.getters.iconSize;
     },
     sortOrder() {
       return this.displayData.sortBy || defaultSortOrder;
@@ -165,20 +173,23 @@ export default {
     isEmpty() {
       return !this.hasItems && !this.hasWidgets;
     },
+    sectionRef() {
+      return `section-outer-${this.groupId}`;
+    },
     /* If the sortBy attribute is specified, then return sorted data */
     sortedItems() {
-      let { items } = this;
+      const items = [...this.items];
       if (this.appConfig.disableSmartSort) return items;
       if (this.sortOrder === 'alphabetical') {
-        this.sortAlphabetically(items);
+        return this.sortAlphabetically(items);
       } else if (this.sortOrder === 'reverse-alphabetical') {
-        this.sortAlphabetically(items).reverse();
+        return this.sortAlphabetically(items).reverse();
       } else if (this.sortOrder === 'most-used') {
-        items = this.sortByMostUsed(items);
+        return this.sortByMostUsed(items);
       } else if (this.sortOrder === 'last-used') {
-        items = this.sortByLastUsed(items);
+        return this.sortByLastUsed(items);
       } else if (this.sortOrder === 'random') {
-        items = this.sortRandomly(items);
+        return this.sortRandomly(items);
       } else if (this.sortOrder && this.sortOrder !== 'default') {
         ErrorHandler(`Unknown Sort order '${this.sortOrder}' under '${this.title}'`);
       }
@@ -197,18 +208,6 @@ export default {
           ? `grid-template-rows: repeat(${this.displayData.itemCountY}, minmax(0, 1fr));` : '';
       }
       return styles;
-    },
-    /* Determines if user has enabled online status checks */
-    enableStatusCheck() {
-      return this.appConfig.statusCheck || false;
-    },
-    /* Determine how often to re-fire status checks */
-    statusCheckInterval() {
-      let interval = this.appConfig.statusCheckInterval;
-      if (!interval) return 0;
-      if (interval > 60) interval = 60;
-      if (interval < 1) interval = 0;
-      return interval;
     },
   },
   methods: {
@@ -243,9 +242,19 @@ export default {
     },
     /* Navigate to the section's single-section view page */
     navigateToSection() {
+      if (!this.title) {
+        ErrorHandler('Cannot open section without a valid name');
+        return;
+      }
       const parse = (section) => section.replace(' ', '-').toLowerCase().trim();
       const sectionIdentifier = parse(this.title);
       router.push({ path: `/home/${sectionIdentifier}` });
+      this.closeContextMenu();
+    },
+    /* Toggle sections collapse state */
+    expandCollapseSection() {
+      const secElem = this.$refs[this.sectionRef];
+      if (secElem) secElem.toggle();
       this.closeContextMenu();
     },
     /* Open the Section Edit Menu */
@@ -273,18 +282,37 @@ export default {
     },
     /* Open custom context menu, and set position */
     openContextMenu(e) {
-      this.contextMenuOpen = true;
-      if (e && window) {
-        this.contextPos = {
-          posX: e.clientX + window.pageXOffset,
-          posY: e.clientY + window.pageYOffset,
-        };
-      }
+      this.contextMenuOpen = true; // Open context menu
+      // If mouse position not set, use section coordinates
+      const sectionOuterId = `section-outer-${this.groupId}`;
+      const sectionPosition = document.getElementById(sectionOuterId).getBoundingClientRect();
+      this.contextPos = {
+        posX: (e.clientX || sectionPosition.right - 10) + window.pageXOffset,
+        posY: (e.clientY || sectionPosition.top + 30) + window.pageYOffset,
+      };
     },
     /* Hide the right-click context menu */
     closeContextMenu() {
       this.contextMenuOpen = false;
     },
+    /* Calculate width of section, used to dynamically set number of columns */
+    calculateSectionWidth() {
+      const secElem = this.$refs[this.sectionRef];
+      if (secElem && secElem.$el.clientWidth) this.sectionWidth = secElem.$el.clientWidth;
+    },
+  },
+  mounted() {
+    // Set the section width, and recalculate when section resized
+    if (this.$refs[this.sectionRef]) {
+      this.resizeObserver = new ResizeObserver(this.calculateSectionWidth)
+        .observe(this.$refs[this.sectionRef].$el);
+    }
+  },
+  beforeDestroy() {
+    // If resize observer set, and element still present, then de-register
+    if (this.resizeObserver && this.$refs[this.sectionRef]) {
+      this.resizeObserver.unobserve(this.$refs[this.sectionRef].$el);
+    }
   },
 };
 </script>
@@ -361,7 +389,9 @@ export default {
     justify-content: space-around;
     .widget-base  {
       min-width: 10rem;
+      width: stretch;
       width: -webkit-fill-available;
+      width: -moz-available;
     }
   }
 }

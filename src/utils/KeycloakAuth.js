@@ -12,23 +12,26 @@ const getAppConfig = () => {
 class KeycloakAuth {
   constructor() {
     const { auth } = getAppConfig();
-    const { serverUrl, realm, clientId } = auth.keycloak;
-    const initOptions = {
-      url: `${serverUrl}/auth`, realm, clientId, onLoad: 'login-required',
-    };
+    const {
+      serverUrl, realm, clientId, idpHint, legacySupport,
+    } = auth.keycloak;
+    const url = legacySupport ? `${serverUrl}/auth` : serverUrl;
+    const initOptions = { url, realm, clientId };
+    const loginOptions = idpHint ? { idpHint } : {};
 
+    this.loginOptions = loginOptions;
     this.keycloakClient = Keycloak(initOptions);
   }
 
   login() {
     return new Promise((resolve, reject) => {
-      this.keycloakClient.init({ onLoad: 'login-required' })
+      this.keycloakClient.init({ onLoad: 'check-sso' })
         .then((auth) => {
           if (auth) {
             this.storeKeycloakInfo();
             return resolve();
           } else {
-            return reject(new Error('Not authenticated'));
+            return this.keycloakClient.login(this.loginOptions);
           }
         })
         .catch((reason) => reject(reason));

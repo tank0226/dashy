@@ -4,10 +4,10 @@
     :resizable="true"
     width="50%"
     height="80%"
-    classes="dashy-modal edit-item"
+    classes="dashy-modal export-modal"
     @closed="modalClosed"
   >
-  <div class="export-config-inner">
+  <div class="export-config-inner" v-if="allowViewConfig">
     <!-- Download and Copy to CLipboard Buttons -->
     <h3>{{ $t('interactive-editor.export.export-title') }}</h3>
     <div class="download-button-container">
@@ -22,10 +22,19 @@
         <DownloadConfigIcon />
       </Button>
     </div>
+    <!-- Show path to which config file is being used -->
+    <div class="config-path-info">
+      <h3>Config Location</h3>
+      <p>
+        The base config file you are currently using is
+        <a :href="configPath">{{ configPath }}</a>
+      </p>
+    </div>
     <!-- View Config in Tree Mode Section -->
     <h3>{{ $t('interactive-editor.export.view-title') }}</h3>
     <tree-view :data="config" class="config-tree-view" />
   </div>
+  <AccessError v-else />
   </modal>
 </template>
 
@@ -34,14 +43,16 @@ import JsYaml from 'js-yaml';
 import Button from '@/components/FormElements/Button';
 import StoreKeys from '@/utils/StoreMutations';
 import { modalNames } from '@/utils/defaults';
+import AccessError from '@/components/Configuration/AccessError';
 import DownloadConfigIcon from '@/assets/interface-icons/config-download-file.svg';
 import CopyConfigIcon from '@/assets/interface-icons/interactive-editor-copy-clipboard.svg';
-import { InfoHandler, InfoKeys } from '@/utils/ErrorHandler';
+import { ErrorHandler, InfoHandler, InfoKeys } from '@/utils/ErrorHandler';
 
 export default {
   name: 'ExportConfigMenu',
   components: {
     Button,
+    AccessError,
     CopyConfigIcon,
     DownloadConfigIcon,
   },
@@ -55,6 +66,14 @@ export default {
     config() {
       return this.$store.state.config;
     },
+    allowViewConfig() {
+      return this.$store.getters.permissions.allowViewConfig;
+    },
+    configPath() {
+      return this.$store.state.currentConfigInfo?.confPath
+      || process.env.VUE_APP_CONFIG_PATH
+      || '/conf.yml';
+    },
   },
   methods: {
     convertJsonToYaml() {
@@ -64,7 +83,7 @@ export default {
       const filename = 'dashy_conf.yml';
       const config = this.convertJsonToYaml();
       const element = document.createElement('a');
-      element.setAttribute('href', `data:text/plain;charset=utf-8, ${encodeURIComponent(config)}`);
+      element.setAttribute('href', `data:text/plain;charset=utf-8,${encodeURIComponent(config)}`);
       element.setAttribute('download', filename);
       element.style.display = 'none';
       document.body.appendChild(element);
@@ -74,8 +93,13 @@ export default {
     },
     copyConfigToClipboard() {
       const config = this.convertJsonToYaml();
-      navigator.clipboard.writeText(config);
-      this.$toasted.show(this.$t('config.data-copied-msg'));
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(config);
+        this.$toasted.show(this.$t('config.data-copied-msg'));
+      } else {
+        ErrorHandler('Clipboard access requires HTTPS. See: https://bit.ly/3N5WuAA');
+        this.$toasted.show('Unable to copy, see log', { className: 'toast-error' });
+      }
       InfoHandler('Config copied to clipboard', InfoKeys.EDITOR);
     },
     modalClosed() {
@@ -110,6 +134,13 @@ export default {
     border-bottom: 1px dashed var(--interactive-editor-color);
     button { margin: 0 1rem; }
   }
+  .config-path-info {
+    p, a {
+      color: var(--interactive-editor-color);
+      font-size: 1.2rem;
+    }
+    border-bottom: 1px dashed var(--interactive-editor-color);
+  }
   .config-tree-view {
     padding: 0.5rem;
     font-family: var(--font-monospace);
@@ -122,6 +153,9 @@ export default {
       font-family: var(--font-monospace);
     }
   }
+}
+.export-modal {
+  background: var(--interactive-editor-background);
 }
 
 </style>

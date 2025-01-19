@@ -36,6 +36,14 @@ export default {
       if (this.options.customCityName) return this.options.customCityName;
       return this.timeZone.split('/')[1].replaceAll('_', ' ');
     },
+    showSeconds() {
+      return !this.options.hideSeconds;
+    },
+    use12Hour() {
+      if (typeof this.options.use12Hour === 'boolean') return this.options.use12Hour;
+      // this is the default, it gets computed by the DateTimeFormat implementation
+      return Intl.DateTimeFormat(this.timeFormat, { timeZone: this.timeZone, hour: 'numeric' }).resolvedOptions().hour12 ?? false;
+    },
   },
   methods: {
     update() {
@@ -48,13 +56,18 @@ export default {
         timeZone: this.timeZone,
         hour: 'numeric',
         minute: 'numeric',
-        second: 'numeric',
+        ...(this.showSeconds && { second: 'numeric' }),
+        ...(this.use12Hour && { hourCycle: 'h12' }),
       }).format();
     },
     /* Get and format the date */
     setDate() {
       this.date = new Date().toLocaleDateString(this.timeFormat, {
-        weekday: 'long', day: 'numeric', year: 'numeric', month: 'short',
+        weekday: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        month: 'short',
+        timeZone: this.timeZone,
       });
     },
   },

@@ -8,7 +8,7 @@
       :value="$store.getters.theme"
       class="theme-dropdown"
       :tabindex="-2"
-      @input="themeChanged"
+      @input="themeChangedInUI"
     />
     </div>
     <IconPalette
@@ -28,17 +28,13 @@
 <script>
 
 import CustomThemeMaker from '@/components/Settings/CustomThemeMaker';
-import {
-  LoadExternalTheme,
-  ApplyLocalTheme,
-  ApplyCustomVariables,
-} from '@/utils/ThemeHelper';
-import Defaults, { localStorageKeys } from '@/utils/defaults';
 import Keys from '@/utils/StoreMutations';
 import IconPalette from '@/assets/interface-icons/config-color-palette.svg';
+import ThemingMixin from '@/mixins/ThemingMixin';
 
 export default {
   name: 'ThemeSelector',
+  mixins: [ThemingMixin],
   props: {
     hidePallete: Boolean,
   },
@@ -46,96 +42,16 @@ export default {
     CustomThemeMaker,
     IconPalette,
   },
-  watch: {
-    /* When theme in VueX store changes, then update theme */
-    themeFromStore(newTheme) {
-      this.selectedTheme = newTheme;
-      this.updateTheme(newTheme);
-    },
-  },
   data() {
     return {
-      selectedTheme: '',
       themeConfiguratorOpen: false, // Control the opening of theme config popup
-      themeHelper: new LoadExternalTheme(),
-      ApplyLocalTheme,
-      ApplyCustomVariables,
     };
   },
-  computed: {
-    /* Get appConfig from store */
-    appConfig() {
-      return this.$store.getters.appConfig;
-    },
-    /* Get users theme from store */
-    themeFromStore() {
-      return this.$store.getters.theme;
-    },
-    /* Combines all theme names (builtin and user defined) together */
-    themeNames: function themeNames() {
-      const externalThemeNames = Object.keys(this.externalThemes);
-      const specialThemes = ['custom'];
-      return [...externalThemeNames, ...Defaults.builtInThemes, ...specialThemes];
-    },
-    extraThemeNames() {
-      const userThemes = this.appConfig.cssThemes || [];
-      if (typeof userThemes === 'string') return [userThemes];
-      return userThemes;
-    },
-    /* Returns an array of links to external CSS from the Config */
-    externalThemes() {
-      const availibleThemes = {};
-      if (this.appConfig) {
-        if (this.appConfig.externalStyleSheet) {
-          const externals = this.appConfig.externalStyleSheet;
-          if (Array.isArray(externals)) {
-            externals.forEach((ext, i) => {
-              availibleThemes[`External Stylesheet ${i + 1}`] = ext;
-            });
-          } else {
-            availibleThemes['External Stylesheet'] = this.appConfig.externalStyleSheet;
-          }
-        }
-      }
-      availibleThemes.Default = '#';
-      return availibleThemes;
-    },
-  },
+  computed: {},
   mounted() {
-    const initialTheme = this.getInitialTheme();
-    this.selectedTheme = initialTheme;
-    // Pass all user custom stylesheets to the themehelper
-    const added = Object.keys(this.externalThemes).map(
-      name => this.themeHelper.add(name, this.externalThemes[name]),
-    );
-    // Quicker loading, if the theme is local we can apply it immidiatley
-    if (this.isThemeLocal(initialTheme)) {
-      this.updateTheme(initialTheme);
-    // If it's an external stylesheet, then wait for promise to resolve
-    } else if (initialTheme !== Defaults.theme) {
-      Promise.all(added).then(() => {
-        this.updateTheme(initialTheme);
-      });
-    }
+    this.initializeTheme();
   },
   methods: {
-    /* Called when dropdown changed
-     * Updates store, which will in turn update theme through watcher
-     */
-    themeChanged() {
-      this.$store.commit(Keys.SET_THEME, this.selectedTheme);
-    },
-    /* Returns the initial theme */
-    getInitialTheme() {
-      const localTheme = localStorage[localStorageKeys.THEME];
-      if (localTheme && localTheme !== 'undefined') return localTheme;
-      return this.appConfig.theme || Defaults.theme;
-    },
-    /* Determines if a given theme is local / not a custom user stylesheet */
-    isThemeLocal(themeToCheck) {
-      const localThemes = [...Defaults.builtInThemes, ...this.extraThemeNames];
-      return localThemes.includes(themeToCheck);
-    },
     /* Opens the theme color configurator popup */
     openThemeConfigurator() {
       this.$store.commit(Keys.SET_MODAL_OPEN, true);
@@ -147,24 +63,6 @@ export default {
         this.$store.commit(Keys.SET_MODAL_OPEN, false);
         this.themeConfiguratorOpen = false;
       }
-    },
-    /* Updates theme. Checks if the new theme is local or external,
-    and calls appropirate updating function. Updates local storage */
-    updateTheme(newTheme) {
-      if (newTheme === 'Default') {
-        this.resetToDefault();
-        this.themeHelper.theme = 'Default';
-      } else if (this.isThemeLocal(newTheme)) {
-        this.ApplyLocalTheme(newTheme);
-      } else {
-        this.themeHelper.theme = newTheme;
-      }
-      this.ApplyCustomVariables(newTheme);
-      localStorage.setItem(localStorageKeys.THEME, newTheme);
-    },
-    /* Removes any applied themes */
-    resetToDefault() {
-      document.getElementsByTagName('html')[0].removeAttribute('data-theme');
     },
   },
 };

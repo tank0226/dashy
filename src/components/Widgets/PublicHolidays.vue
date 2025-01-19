@@ -54,10 +54,17 @@ export default {
       const then = new Date((now.setMonth(now.getMonth() + this.monthsToShow)));
       return `${then.getDate()}-${then.getMonth() + 1}-${then.getFullYear()}`;
     },
+    region() {
+      if (this.options?.state) {
+        return `&region=${this.options.state}`;
+      }
+      return '';
+    },
     endpoint() {
       return `${widgetApiEndpoints.holidays}`
       + `&fromDate=${this.startDate}&toDate=${this.endDate}`
-      + `&country=${this.country}&holidayType=${this.holidayType}`;
+      + `&country=${this.country}&holidayType=${this.holidayType}`
+      + `${this.region}`;
     },
   },
   methods: {
@@ -77,13 +84,17 @@ export default {
     /* Assign data variables to the returned data */
     processData(holidays) {
       const results = [];
-      const makeDate = (date) => timestampToDate(
-        new Date(`${date.year}-${date.month}-${date.day}`).getTime(),
-      );
+      const makeDate = (date) => {
+        const formattedMonth = date.month.toString().padStart(2, '0'); // Ensure two digits
+        const formattedDay = date.day.toString().padStart(2, '0'); // Ensure two digits
+        const dateString = `${date.year}-${formattedMonth}-${formattedDay}T00:00:00`;
+        return timestampToDate(new Date(dateString).getTime());
+      };
       const formatType = (ht) => capitalize(ht.replaceAll('_', ' '));
       holidays.forEach((holiday) => {
         results.push({
-          name: holiday.name[0].text,
+          name: holiday.name
+            .filter(p => p.lang === this.options.lang)[0].text || holiday.name[0].text,
           date: makeDate(holiday.date),
           type: formatType(holiday.holidayType),
           observed: holiday.observedOn ? makeDate(holiday.observedOn) : '',

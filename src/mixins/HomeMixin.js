@@ -3,10 +3,14 @@
  */
 
 import Defaults, { localStorageKeys, iconCdns } from '@/utils/defaults';
+import Keys from '@/utils/StoreMutations';
 import { searchTiles } from '@/utils/Search';
+import { checkItemVisibility } from '@/utils/CheckItemVisibility';
 
 const HomeMixin = {
-  props: {},
+  props: {
+    subPageInfo: Object,
+  },
   computed: {
     sections() {
       return this.$store.getters.sections;
@@ -23,17 +27,70 @@ const HomeMixin = {
     modalOpen() {
       return this.$store.state.modalOpen;
     },
+    pageId() {
+      return this.$store.state.currentConfigInfo?.confId || 'home';
+    },
   },
   data: () => ({
     searchValue: '',
   }),
+  watch: {
+    async $route() {
+      this.loadUpConfig();
+    },
+    pageInfo: {
+      handler(newPageInfo) {
+        if (newPageInfo && newPageInfo.title) {
+          document.title = newPageInfo.title;
+        }
+      },
+      immediate: true,
+    },
+  },
+  async created() {
+    this.loadUpConfig();
+  },
   methods: {
+    /* When page loaded / sub-page changed, initiate config fetch */
+    async loadUpConfig() {
+      const subPage = this.determineConfigFile();
+      await this.$store.dispatch(Keys.INITIALIZE_CONFIG, subPage);
+    },
+    /* Based on the current route, get which config to display, null will use default */
+    determineConfigFile() {
+      const pagePath = this.$router.currentRoute.path;
+      const isSubPage = new RegExp((/(home|workspace|minimal)\/[a-zA-Z0-9-]+/g)).test(pagePath);
+      const subPageName = isSubPage ? pagePath.split('/').pop() : null;
+      return subPageName;
+    },
+    /* TEMPORARY: If on sub-page, check if custom theme is set and return it */
+    getSubPageTheme() {
+      if (!this.pageId || this.pageId === 'home') {
+        return null;
+      } else {
+        const themeStoreKey = `${localStorageKeys.THEME}-${this.pageId}`;
+        return localStorage[themeStoreKey] || null;
+      }
+    },
+    setTheme() {
+      // const theme = this.getSubPageTheme() || GetTheme();
+      // ApplyLocalTheme(theme);
+      // ApplyCustomVariables(theme);
+    },
     updateModalVisibility(modalState) {
       this.$store.commit('SET_MODAL_OPEN', modalState);
     },
     /* Updates local data with search value, triggered from filter comp */
     searching(searchValue) {
       this.searchValue = searchValue || '';
+    },
+    /* Returns a unique ID based on the page and section name */
+    makeSectionId(section) {
+      const normalize = (str) => (
+        str ? str.trim().toLowerCase().replace(/[^a-zA-Z0-9]/g, '-')
+          : `unnamed-${(`000${Math.floor(Math.random() * 1000)}`).slice(-3)}`
+      );
+      return `${this.pageId || 'unknown-page'}-${normalize(section.name)}`;
     },
     /* Returns true if there is one or more sections in the config */
     checkTheresData(sections) {
@@ -42,8 +99,11 @@ const HomeMixin = {
     },
     /* Returns only the tiles that match the users search query */
     filterTiles(allTiles) {
-      if (!allTiles) return [];
-      return searchTiles(allTiles, this.searchValue);
+      if (!allTiles) {
+        return [];
+      }
+      const visibleTiles = allTiles.filter((tile) => checkItemVisibility(tile));
+      return searchTiles(visibleTiles, this.searchValue);
     },
     /* Checks if any sections or items use icons from a given CDN */
     checkIfIconLibraryNeeded(prefix) {
@@ -61,6 +121,8 @@ const HomeMixin = {
     },
     /* Checks if any of the icons are Font Awesome glyphs */
     checkIfFontAwesomeNeeded() {
+      if (this.appConfig.enableFontAwesome === false) return false;
+      if (this.appConfig.enableFontAwesome) return true;
       let isNeeded = this.checkIfIconLibraryNeeded('fa-');
       const currentTheme = localStorage[localStorageKeys.THEME]; // Some themes require FA
       if (['material', 'material-dark'].includes(currentTheme)) isNeeded = true;
@@ -68,7 +130,7 @@ const HomeMixin = {
     },
     /* Injects font-awesome's script tag, only if needed */
     initiateFontAwesome() {
-      if (this.appConfig.enableFontAwesome || this.checkIfFontAwesomeNeeded()) {
+      if (this.checkIfFontAwesomeNeeded()) {
         const fontAwesomeScript = document.createElement('script');
         const faKey = this.appConfig.fontAwesomeKey || Defaults.fontAwesomeKey;
         fontAwesomeScript.setAttribute('src', `${iconCdns.fa}/${faKey}.js`);
@@ -77,7 +139,9 @@ const HomeMixin = {
     },
     /* Checks if any of the icons are Material Design Icons */
     checkIfMdiNeeded() {
-      return this.checkIfIconLibraryNeeded('mdi-');
+      const userOverride = this.appConfig.enableMaterialDesignIcons;
+      if (userOverride === false) return false;
+      return userOverride || this.checkIfIconLibraryNeeded('mdi-');
     },
     /* Injects Material Design Icons, only if needed */
     initiateMaterialDesignIcons() {
@@ -89,13 +153,13 @@ const HomeMixin = {
       }
     },
     /* Returns true if there is more than 1 sub-result visible during searching */
-    checkIfResults() {
-      if (!this.sections) return false;
+    checkIfResults(sections) {
+      if (!sections) return false;
       else {
         let itemsFound = true;
-        this.sections.forEach((section) => {
+        sections.forEach((section) => {
           if (section.widgets && section.widgets.length > 0) itemsFound = false;
-          if (this.filterTiles(section.items, this.searchValue).length > 0) itemsFound = false;
+          if (section.filteredItems.length > 0) itemsFound = false;
         });
         return itemsFound;
       }
@@ -103,7 +167,7 @@ const HomeMixin = {
     /* If user has a background image, then generate CSS attributes */
     getBackgroundImage() {
       if (this.appConfig && this.appConfig.backgroundImg) {
-        return `background: url('${this.appConfig.backgroundImg}');background-size:cover;`;
+        return `background: url('${this.appConfig.backgroundImg}') no-repeat center fixed;background-size:cover;`;
       }
       return '';
     },

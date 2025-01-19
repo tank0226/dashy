@@ -3,6 +3,7 @@ import ConfigAccumulator from '@/utils/ConfigAccumalator';
 import ErrorHandler from '@/utils/ErrorHandler';
 import { cookieKeys, localStorageKeys, userStateEnum } from '@/utils/defaults';
 import { isKeycloakEnabled } from '@/utils/KeycloakAuth';
+import { isOidcEnabled } from '@/utils/OidcAuth';
 
 /* Uses config accumulator to get and return app config */
 const getAppConfig = () => {
@@ -39,9 +40,37 @@ const getUsers = () => {
  * @returns {String} The hashed token
  */
 const generateUserToken = (user) => {
+  if (!user.user || (!user.hash && !user.password)) {
+    ErrorHandler('Invalid user object. Must have `user` and either a `hash` or `password` param');
+    return undefined;
+  }
+  const passHash = user.hash || sha256(process.env[user.password]).toString().toUpperCase();
   const strAndUpper = (input) => input.toString().toUpperCase();
-  const sha = sha256(strAndUpper(user.user) + strAndUpper(user.hash));
+  const sha = sha256(strAndUpper(user.user) + strAndUpper(passHash));
   return strAndUpper(sha);
+};
+
+export const getCookieToken = () => {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${cookieKeys.AUTH_TOKEN}=`);
+  if (parts.length === 2) return parts.pop().split(';').shift();
+  return null;
+};
+
+export const makeBasicAuthHeaders = () => {
+  const token = getCookieToken();
+  const bearerAuth = (token && token.length > 5) ? `Bearer ${token}` : null;
+
+  const username = process.env.VUE_APP_BASIC_AUTH_USERNAME
+    || localStorage[localStorageKeys.USERNAME]
+    || 'user';
+  const password = process.env.VUE_APP_BASIC_AUTH_PASSWORD || bearerAuth;
+  const basicAuth = `Basic ${btoa(`${username}:${password}`)}`;
+
+  const headers = password
+    ? { headers: { Authorization: basicAuth, 'WWW-Authenticate': 'true' } }
+    : {};
+  return headers;
 };
 
 /**
@@ -50,20 +79,13 @@ const generateUserToken = (user) => {
  */
 export const isLoggedIn = () => {
   const users = getUsers();
-  const validTokens = users.map((user) => generateUserToken(user));
-  let userAuthenticated = false;
-  document.cookie.split(';').forEach((cookie) => {
-    if (cookie && cookie.split('=').length > 1) {
-      const cookieKey = cookie.split('=')[0].trim();
-      const cookieValue = cookie.split('=')[1].trim();
-      if (cookieKey === cookieKeys.AUTH_TOKEN) {
-        if (validTokens.includes(cookieValue)) {
-          userAuthenticated = true;
-        }
-      }
-    }
+  const cookieToken = getCookieToken();
+  return users.some((user) => {
+    if (generateUserToken(user) === cookieToken) {
+      localStorage.setItem(localStorageKeys.USERNAME, user.user);
+      return true;
+    } else return false;
   });
-  return userAuthenticated;
 };
 
 /* Returns true if authentication is enabled */
@@ -75,7 +97,7 @@ export const isAuthEnabled = () => {
 /* Returns true if guest access is enabled */
 export const isGuestAccessEnabled = () => {
   const appConfig = getAppConfig();
-  if (appConfig.auth && typeof appConfig.auth === 'object' && !isKeycloakEnabled()) {
+  if (appConfig.auth && typeof appConfig.auth === 'object' && !isKeycloakEnabled() && !isOidcEnabled()) {
     return appConfig.auth.enableGuestAccess || false;
   }
   return false;
@@ -100,7 +122,18 @@ export const checkCredentials = (username, pass, users, messages) => {
   } else {
     users.forEach((user) => {
       if (user.user.toLowerCase() === username.toLowerCase()) { // User found
-        if (user.hash.toLowerCase() === sha256(pass).toString().toLowerCase()) {
+        if (user.password) {
+          if (!user.password.startsWith('VUE_APP_')) {
+            ErrorHandler('Invalid password format. Please use VUE_APP_ prefix');
+            response = { correct: false, msg: messages.incorrectPassword };
+          } else if (!process.env[user.password]) {
+            ErrorHandler(`Missing environmental variable for ${user.password}`);
+          } else if (process.env[user.password] === pass) {
+            response = { correct: true, msg: messages.successMsg };
+          } else {
+            response = { correct: false, msg: messages.incorrectPassword };
+          }
+        } else if (user.hash && user.hash.toLowerCase() === sha256(pass).toString().toLowerCase()) {
           response = { correct: true, msg: messages.successMsg }; // Password is correct
         } else { // User found, but password is not a match
           response = { correct: false, msg: messages.incorrectPassword };
@@ -121,7 +154,7 @@ export const login = (username, pass, timeout) => {
   const now = new Date();
   const expiry = new Date(now.setTime(now.getTime() + timeout)).toGMTString();
   const userObject = { user: username, hash: sha256(pass).toString().toLowerCase() };
-  document.cookie = `authenticationToken=${generateUserToken(userObject)};`
+  document.cookie = `${cookieKeys.AUTH_TOKEN}=${generateUserToken(userObject)};`
     + `${timeout > 0 ? `expires=${expiry}` : ''}`;
   localStorage.setItem(localStorageKeys.USERNAME, username);
 };
@@ -130,7 +163,7 @@ export const login = (username, pass, timeout) => {
  * Removed the browsers' cookie, causing user to be logged out
  */
 export const logout = () => {
-  document.cookie = 'authenticationToken=null';
+  document.cookie = `${cookieKeys.AUTH_TOKEN}=null`;
   localStorage.removeItem(localStorageKeys.USERNAME);
 };
 
@@ -146,7 +179,7 @@ export const getCurrentUser = () => {
   let foundUserObject = false; // Value to return
   getUsers().forEach((user) => {
     // If current logged-in user found, then return that user
-    if (user.user === username) foundUserObject = user;
+    if (user.user.toLowerCase() === username.toLowerCase()) foundUserObject = user;
   });
   return foundUserObject;
 };
@@ -157,8 +190,8 @@ export const getCurrentUser = () => {
  * */
 export const isLoggedInAsGuest = () => {
   const guestEnabled = isGuestAccessEnabled();
-  const notLoggedIn = !isLoggedIn();
-  return guestEnabled && notLoggedIn;
+  const loggedIn = isLoggedIn();
+  return guestEnabled && !loggedIn;
 };
 
 /**
@@ -176,7 +209,7 @@ export const isUserAdmin = () => {
   const currentUser = localStorage[localStorageKeys.USERNAME];
   let isAdmin = false;
   users.forEach((user) => {
-    if (user.user === currentUser) {
+    if (user.user.toLowerCase() === currentUser.toLowerCase()) {
       if (user.type === 'admin') isAdmin = true;
     }
   });
@@ -197,8 +230,10 @@ export const getUserState = () => {
     loggedIn,
     guestAccess,
     keycloakEnabled,
+    oidcEnabled,
   } = userStateEnum; // Numeric enum options
   if (isKeycloakEnabled()) return keycloakEnabled; // Keycloak auth configured
+  if (isOidcEnabled()) return oidcEnabled;
   if (!isAuthEnabled()) return notConfigured; // No auth enabled
   if (isLoggedIn()) return loggedIn; // User is logged in
   if (isGuestAccessEnabled()) return guestAccess; // Guest is viewing

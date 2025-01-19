@@ -7,7 +7,7 @@
     classes="dashy-modal edit-app-config"
     @closed="modalClosed"
   >
-  <div class="edit-app-config-inner">
+  <div class="edit-app-config-inner" v-if="allowViewConfig">
   <h3>{{ $t('interactive-editor.menu.edit-app-config-btn') }}</h3>
   <!-- Show caution message -->
   <div class="app-config-intro">
@@ -35,6 +35,7 @@
   <!-- Save Button, lower -->
   <SaveCancelButtons :saveClick="saveToState" :cancelClick="cancelEditing" />
   </div>
+  <AccessError v-else />
   </modal>
 </template>
 
@@ -43,6 +44,7 @@ import FormSchema from '@formschema/native';
 import DashySchema from '@/utils/ConfigSchema';
 import StoreKeys from '@/utils/StoreMutations';
 import { modalNames } from '@/utils/defaults';
+import AccessError from '@/components/Configuration/AccessError';
 import SaveCancelButtons from '@/components/InteractiveEditor/SaveCancelButtons';
 
 export default {
@@ -58,6 +60,7 @@ export default {
   components: {
     FormSchema,
     SaveCancelButtons,
+    AccessError,
   },
   mounted() {
     this.formData = this.appConfig;
@@ -65,6 +68,9 @@ export default {
   computed: {
     appConfig() {
       return this.$store.getters.appConfig;
+    },
+    allowViewConfig() {
+      return this.$store.getters.permissions.allowViewConfig;
     },
   },
   methods: {
@@ -86,8 +92,16 @@ export default {
     /* Remove any attribute which has an undefined value before saving */
     removeUndefinedValues(rawAppConfig) {
       const raw = rawAppConfig;
-      const isEmpty = (value) => (value === undefined);
-      Object.keys(raw).forEach(key => isEmpty(raw[key]) && delete raw[key]);
+      const isEmptyObject = (obj) => (typeof obj === 'object' && Object.keys(obj).length === 0);
+      const isEmpty = (value) => (value === undefined || isEmptyObject(value));
+
+      // Delete empty values
+      Object.keys(raw).forEach(key => {
+        if (isEmpty(raw[key])) delete raw[key];
+      });
+      // If KC config empty, delete it
+      const kcConfig = raw.auth.keycloak;
+      if (!kcConfig.clientId && !kcConfig.realm && !kcConfig.serverUrl) delete raw.auth.keycloak;
       return raw;
     },
   },

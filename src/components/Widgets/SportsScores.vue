@@ -28,7 +28,7 @@
   </div>
   <div class="match-row" v-for="match in matches" :key="match.id">
     <!-- Banner Image -->
-    <div class="match-thumbnail-wrap">
+    <div class="match-thumbnail-wrap" v-if="!hideImage">
       <img :src="match.thumbnail" :alt="`${match.title} Banner Image`" class="match-thumbnail" />
     </div>
     <!-- Team Scores -->
@@ -93,13 +93,16 @@ export default {
       return this.options.leagueId;
     },
     apiKey() {
-      return this.options.apiKey || '50130162';
+      return this.parseAsEnvVar(this.options.apiKey) || '50130162';
     },
     limit() {
       return this.options.limit || 20;
     },
     pastOrFuture() {
       return this.options.pastOrFuture || 'past';
+    },
+    hideImage() {
+      return this.options.hideImage || false;
     },
     endpoint() {
       this.initiate();

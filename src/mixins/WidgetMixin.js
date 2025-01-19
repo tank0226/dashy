@@ -3,7 +3,7 @@
  * Manages loading state, error handling, data updates and user options
  */
 import axios from 'axios';
-import ProgressBar from 'rsup-progress';
+import { Progress } from 'rsup-progress';
 import ErrorHandler from '@/utils/ErrorHandler';
 import { serviceEndpoints } from '@/utils/defaults';
 
@@ -15,11 +15,12 @@ const WidgetMixin = {
     },
   },
   data: () => ({
-    progress: new ProgressBar({ color: 'var(--progress-bar)' }),
+    progress: new Progress({ color: 'var(--progress-bar)' }),
     overrideProxyChoice: false,
     overrideUpdateInterval: null,
     disableLoader: false, // Prevent ever showing the loader
     updater: null, // Stores interval
+    defaultTimeout: 50000,
   }),
   /* When component mounted, fetch initial data */
   mounted() {
@@ -71,9 +72,11 @@ const WidgetMixin = {
       this.updater = setInterval(() => { this.update(); }, this.updateInterval);
     },
     /* Called when an error occurs. Logs to handler, and passes to parent component */
-    error(msg, stackTrace) {
+    error(msg, stackTrace, quite = false) {
       ErrorHandler(msg, stackTrace);
-      this.$emit('error', msg);
+      if (!this.options.ignoreErrors && !quite) {
+        this.$emit('error', msg);
+      }
     },
     /* When a data request update starts, show loader */
     startLoading() {
@@ -106,8 +109,9 @@ const WidgetMixin = {
       const CustomHeaders = options || null;
       const headers = this.useProxy
         ? { 'Target-URL': endpoint, CustomHeaders: JSON.stringify(CustomHeaders) } : CustomHeaders;
+      const timeout = this.options.timeout || this.defaultTimeout;
       const requestConfig = {
-        method, url, headers, data,
+        method, url, headers, data, timeout,
       };
       // Make request
       return new Promise((resolve, reject) => {
@@ -126,6 +130,19 @@ const WidgetMixin = {
             this.finishLoading();
           });
       });
+    },
+    /* Check if a value is an environment variable, return its value if so. */
+    parseAsEnvVar(str) {
+      if (typeof str !== 'string') return str;
+      if (str.includes('VUE_APP_')) {
+        const envVar = process.env[str];
+        if (!envVar) {
+          this.error(`Environment variable ${str} not found`);
+        } else {
+          return envVar;
+        }
+      }
+      return str;
     },
   },
 };

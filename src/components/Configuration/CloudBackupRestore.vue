@@ -9,7 +9,7 @@
         {{ $t('cloud-sync.intro-l2') }}
         <br>
         {{ $t('cloud-sync.intro-l3') }}
-        <a href="https://github.com/Lissy93/dashy/blob/master/docs/backup-restore.md">docs</a>
+        <a href="https://github.com/Lissy93/dashy/blob/master/docs/backup-restore.md">{{ $t('cloud-sync.intro-docs') }}</a>.
       </p>
     </div>
     <!-- Create or update a backup form -->
@@ -60,7 +60,7 @@
 <script>
 // Import libraries
 import sha256 from 'crypto-js/sha256';
-import ProgressBar from 'rsup-progress';
+import { Progress } from 'rsup-progress';
 // Import form elements
 import Button from '@/components/FormElements/Button';
 import Input from '@/components/FormElements/Input';
@@ -86,7 +86,7 @@ export default {
       restorePassword: '',
       restoreCode: '',
       backupId: localStorage[localStorageKeys.BACKUP_ID] || '',
-      progress: new ProgressBar({ color: 'var(--progress-bar)' }),
+      progress: new Progress({ color: 'var(--progress-bar)' }),
     };
   },
   components: { // UI components / icons
@@ -155,12 +155,23 @@ export default {
     },
     /* When restored data is revieved, then save to local storage, and apply it in state */
     applyRestoredData(config, backupId) {
-      // Store restored data in local storage
-      localStorage.setItem(localStorageKeys.CONF_SECTIONS, JSON.stringify(config.sections));
-      localStorage.setItem(localStorageKeys.APP_CONFIG, JSON.stringify(config.appConfig));
-      localStorage.setItem(localStorageKeys.PAGE_INFO, JSON.stringify(config.pageInfo));
-      if (config.appConfig.theme) {
-        localStorage.setItem(localStorageKeys.THEME, config.appConfig.theme);
+      const isSubPage = !!this.$store.state.currentConfigInfo.confId;
+      if (isSubPage) { // Apply to sub-page only
+        const subConfigId = this.$store.state.currentConfigInfo.confId;
+        const sectionStorageKey = `${localStorageKeys.CONF_SECTIONS}-${subConfigId}`;
+        const pageInfoStorageKey = `${localStorageKeys.PAGE_INFO}-${subConfigId}`;
+        const themeStoreKey = `${localStorageKeys.THEME}-${subConfigId}`;
+        localStorage.setItem(sectionStorageKey, JSON.stringify(config.sections));
+        localStorage.setItem(pageInfoStorageKey, JSON.stringify(config.pageInfo));
+        localStorage.setItem(themeStoreKey, config.appConfig.theme);
+      } else { // Apply to main config
+        localStorage.setItem(localStorageKeys.CONF_SECTIONS, JSON.stringify(config.sections));
+        localStorage.setItem(localStorageKeys.APP_CONFIG, JSON.stringify(config.appConfig));
+        localStorage.setItem(localStorageKeys.PAGE_INFO, JSON.stringify(config.pageInfo));
+        localStorage.setItem(localStorageKeys.CONF_PAGES, JSON.stringify(config.pages || []));
+        if (config.appConfig.theme) {
+          localStorage.setItem(localStorageKeys.THEME, config.appConfig.theme);
+        }
       }
       // Save hashed token in local storage
       this.setBackupIdLocally(backupId, this.restorePassword);

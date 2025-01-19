@@ -1,5 +1,126 @@
 # Changelog
 
+## ✨ 2.1.1 Improvements [PR #775](https://github.com/Lissy93/dashy/pull/775)
+- Stop status checks when item destroyed
+  - #767 by @marekful
+- Add Elizabeth + non-underground lines to TFL widget
+  - #766 by @dougaldhub
+- Ensure first SSL certificate check finished before second
+  - #760 by @marekful
+- Huge improvment to the way widgets are defined
+  - #758 by @patrickheeney
+- Update APOD widget to use https://apod.as93.net
+  - #745 by @k073l 
+- Small docs update
+  - #741 by @markusdd 
+- A set of awesome NextCloud widgets
+  - #740 by @marekful
+- Option to show / hide detailed info for StatPing widget
+  - #714 by @marekful
+- Korean translations
+  - #711 by @boggy-cs
+- Small docs update
+  - #705 by @pablomalo
+
+## ✨ 2.0.9 Adds Multi-Page Support [PR #685](https://github.com/Lissy93/dashy/pull/685)
+- Adds Widgets for AdGuard
+
+## ✨ 2.0.9 Adds Multi-Page Support [PR #663](https://github.com/Lissy93/dashy/pull/663)
+- Fix KeyCloak API URL (#564)
+- Fix guest has config access (#590)
+- Fix collapsible content in multi-page support (#626)
+- Fix layout and item size buttons ( #629)
+- Refactor make request in RSS widget (#632)
+- Fix material-design-icons header in schema (#640)
+- Add option to hide seconds in clock widget (#644)
+- Fix pageInfo not being read in router (#645)
+- Fix startingView not honored (#646)
+- Fix Status Check default (#651)
+- Add option to hide image in SportsScores Widget (#654)
+- Add Adventure-basic theme (#655)
+- Write docs for sub-items (#657)
+- Add Font-Awesome displaying as square to troubleshooting guide (#659)
+- Show expand / collapse in context menu (#660)
+- Only deploy new release when relevant files have changed
+
+## ✨ 2.0.8 Adds Multi-Page Support [PR #617](https://github.com/Lissy93/dashy/pull/617)
+- Adds support for multiple pages per-dashboard
+- Adds new attribute at root of main config file: `pages`
+- Updates router and nav-bar to automatically create paths for both local and remote configs
+
+## ⚡️ 2.0.7 Improves handling of Sections and Items [PR #595](https://github.com/Lissy93/dashy/pull/595)
+- Adds functionality for sub-items / item-groups
+- Creates an item mixin, for reusing functionality
+- Item width calculated based on parent section width
+- Improved mobile support, long-press for right-click
+- Adds 2 new themes (`lissy` and `charry-blossom`)
+- Adds 2 new widgets (`mullvad-status`, and `blacklist-check`)
+
+## 🐛 2.0.6 Fixes user requested issues [PR #557](https://github.com/Lissy93/dashy/pull/557)
+- Allows middle click open new tab, Re: #492
+- Implements Max redirects for status checks, Re: #494
+- Adds Gitpod config for cloud-ready IDE, Re: #497
+- Adss new screenshots to showcase, Re: #505
+- Fixes excess space below footer, Re: #522
+- Allows iframe content to be viewed full-screen, Re: #524
+- Fixes Glances widgets with Authorization headers, Re: #546
+- Adds target attribute to nav links, Re: #552
+- Removes fixed max-width on wide-screens, Re: #554
+- Adds missing type attribute to external CSS, Re: #560
+- Updates path to Keycloak API, Re: #564
+- Fixes link to @walkxhub homelab icons, Re #568
+- Fixes local image path on sub-page, Re: #570
+- Adds typecheck on edit item tags, Re: #575
+- Fixes item size in config not honored, Re: #576
+
+## ✨ 2.0.5 - Bug Fixes and a few New Features
+
+#### Partially revert 2.0.4, fixing several issues caused by `conf.yml` not being loaded at startup.
+This change requires a rebuild of the application when several options under `appConfig` are changed.
+Fixes #544 #555
+
+#### Several other changes since 2.0.4, including:
+The `Add New Section` button on the UI editor now displays if no sections are present. #536
+When using SSL, the server can now redirect from HTTP to HTTPS. This is enabled by default when using SSL. #538
+Section context menus are now accessible on mobile, and will no longer clip off the screen. #541
+Italian translations have been added. #556
+
+## ✨ 2.0.4 - Dynamic Config Loading [PR #528](https://github.com/Lissy93/dashy/pull/528)
+- `conf.yml` is now loaded dynamically and the app now only needs a browser refresh on config change, not a full rebuild!
+
+## 🐛 2.0.3 - Bug Fixes [PR #488](https://github.com/Lissy93/dashy/pull/488)
+- Press enter to submit login form (Re: #483)
+- Allow disabling write to local storage and disk (Re: #485)
+- Fix malformed YAML from export config (Re: #482)
+- Allow global option for useProxy (Re: #486)
+- Look into arrow key navigation error (Re: #463)
+- Disallow displaying config (Re: #455)
+- Round values in Glances Alerts widget (Re: #454)
+- Create a CPU temp widget (Re: #452)
+- Add to docs: Keycloak in Kubernetes (Re: #479)
+- Add a widget for displaying images (Re: #487)
+
+## ⬆️ 2.0.2 - Dependency Updates [PR #471](https://github.com/Lissy93/dashy/pull/471)
+- Updates Alpine version for main Dockerfile
+- Updates node_modules to latest stable versions
+
+## 🐛 2.0.1 - Fixes Section Height [PR #462](https://github.com/Lissy93/dashy/pull/462)
+- Adds `cutToHeight` to config schema (Re: #461)
+- Removes the full-height CSS from colorful theme
+- Improved config validation warnings in JSON editor
+- Removes empty Keycloak block from appConfig editor
+- Adds typechecking to search and clear search for Safari
+
+## ⚡️ 2.0.0 - Small Fixes and Docker Multi-Arch Build [PR #451](https://github.com/Lissy93/dashy/pull/451)
+- Fixes full-height sections for mobile and Safari (Re: #432, #442)
+- Fixes empty section visible in search (Re: #447)
+- Fixes numbers omited from tag names (Re: #430)
+- Option for custom status code in status check (Re: #456, #448)
+- Adds @stuu3k's dashboard to showcase (Re: #446)
+- Switches recover and death count in Covid widget (Re: #148)
+- Improved contrast in light material theme
+- Adds new script to lint, test, build and publish a multi-architecture Docker image to various registries
+
 ## 💄 1.9.9 - Minor UI + Docs Updates [PR #431](https://github.com/Lissy93/dashy/pull/431)
 - Improved theme support for widgets
 - Better widget layout in Workspace and Minimal views

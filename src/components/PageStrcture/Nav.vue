@@ -1,25 +1,35 @@
 <template>
-    <div class="nav-outer">
+    <div class="nav-outer" v-if="allLinks && allLinks.length > 0">
       <IconBurger
         :class="`burger ${!navVisible ? 'visible' : ''}`"
         @click="navVisible = !navVisible"
       />
       <nav id="nav" v-if="navVisible">
-        <router-link
-          v-for="(link, index) in links"
-          :key="index"
-          :to="link.path"
-          :href="link.path"
-          :target="isUrl(link.path) ? '_blank' : ''"
-          rel="noopener noreferrer"
-          class="nav-item"
-        >{{link.title}}</router-link>
+        <!-- Render either router-link or anchor, depending if internal / external link -->
+        <template v-for="(link, index) in allLinks">
+          <router-link v-if="!isUrl(link.path)"
+            :key="index"
+            :to="link.path"
+            class="nav-item"
+          >{{link.title}}
+          </router-link>
+          <a v-else
+            :key="index"
+            :href="link.path"
+            :target="determineTarget(link)"
+            class="nav-item"
+            rel="noopener noreferrer"
+          >{{link.title}}
+          </a>
+        </template>
       </nav>
     </div>
 </template>
 
 <script>
 import IconBurger from '@/assets/interface-icons/burger-menu.svg';
+import { makePageSlug } from '@/utils/ConfigHelpers';
+import { checkPageVisibility } from '@/utils/CheckPageVisibility';
 
 export default {
   name: 'Nav',
@@ -33,6 +43,18 @@ export default {
     navVisible: true,
     isMobile: false,
   }),
+  computed: {
+    /* Get links to sub-pages, and combine with nav-links */
+    allLinks() {
+      const subPages = this.$store.getters.pages.filter((page) => checkPageVisibility(page))
+        .map((subPage) => ({
+          path: makePageSlug(subPage.name, 'home'),
+          title: subPage.name,
+        }));
+      const navLinks = this.links || [];
+      return [...navLinks, ...subPages];
+    },
+  },
   created() {
     this.navVisible = !this.detectMobile();
     this.isMobile = this.detectMobile();
@@ -43,6 +65,16 @@ export default {
       return screenWidth && screenWidth < 600;
     },
     isUrl: (str) => new RegExp(/(http|https):\/\/(\S+)(:[0-9]+)?/).test(str),
+    determineTarget(link) {
+      if (!link.target) return '_blank';
+      switch (link.target) {
+        case 'sametab': return '_self';
+        case 'newtab': return '_blank';
+        case 'parent': return '_parent';
+        case 'top': return '_top';
+        default: return undefined;
+      }
+    },
   },
 };
 </script>

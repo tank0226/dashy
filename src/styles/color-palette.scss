@@ -31,6 +31,7 @@
   --transparent-white-70: #ffffffb3;
   --transparent-white-50: #ffffff80;
   --transparent-white-30: #ffffff4d;
+  --transparent-white-10: #ffffff0f;
 
   /* Color variables for specific components
   * all variables are optional, since they inherit initial values from above*
@@ -65,6 +66,7 @@
   --widget-text-color: var(--primary);
   --widget-background-color: var(--background-darker);
   --widget-accent-color: var(--background);
+  --widget-base-background: transparent;
   // Interactive editor
   --interactive-editor-color: var(--primary);
   --interactive-editor-background: var(--background);

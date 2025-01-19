@@ -1,14 +1,13 @@
 <template>
-<div class="xkcd-wrapper">
+<div class="xkcd-wrapper" v-tooltip="toolTip(alt)">
   <h3 class="xkcd-title">{{ title }}</h3>
   <a :href="`https://xkcd.com/${comicNum}/`">
-    <img :src="image" :alt="alt" class="xkcd-comic" />
+    <img :src="image" :alt="alt" class="xkcd-comic"/>
   </a>
 </div>
 </template>
 
 <script>
-import axios from 'axios';
 import WidgetMixin from '@/mixins/WidgetMixin';
 import { widgetApiEndpoints } from '@/utils/defaults';
 
@@ -41,11 +40,17 @@ export default {
   methods: {
     /* Make GET request to CoinGecko API endpoint */
     fetchData() {
-      axios.get(this.endpoint)
-        .then((response) => {
-          this.processData(response.data);
+      fetch(this.endpoint)
+        .then(response => {
+          if (!response.ok) {
+            this.error('Network response was not ok');
+          }
+          return response.json();
         })
-        .catch((dataFetchError) => {
+        .then(data => {
+          this.processData(data);
+        })
+        .catch(dataFetchError => {
           this.error('Unable to fetch data', dataFetchError);
         })
         .finally(() => {
@@ -59,13 +64,19 @@ export default {
       this.alt = data.alt;
       this.comicNum = data.num;
     },
+    toolTip(alt) {
+      const content = alt;
+      return {
+        content, html: false, trigger: 'hover focus', delay: 250, classes: 'xkcd-alt-tt',
+      };
+    },
   },
 };
 </script>
 
 <style scoped lang="scss">
 .xkcd-wrapper {
- .xkcd-title {
+.xkcd-title {
     font-size: 1.2rem;
     margin: 0.25rem auto;
     color: var(--widget-text-color);
@@ -79,4 +90,9 @@ export default {
   }
 }
 
+</style>
+<style lang="scss">
+.xkcd-alt-tt {
+  min-width: 20rem;
+}
 </style>

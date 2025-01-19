@@ -29,7 +29,7 @@
         </li>
       </ul>
       <!-- Edit Options -->
-      <ul class="menu-section">
+      <ul class="menu-section" v-bind:class="{ disabled: !isEditAllowed }">
         <li class="section-title">
           {{ $t('context-menus.item.options-section-title') }}
         </li>
@@ -77,6 +77,7 @@ export default {
     posX: Number, // The X coordinate for positioning
     posY: Number, // The Y coordinate for positioning
     show: Boolean, // Should show or hide the menu
+    disableEdit: Boolean, // Disable editing for certain items
   },
   computed: {
     isMenuDisabled() {
@@ -84,6 +85,10 @@ export default {
     },
     isEditMode() {
       return this.$store.state.editMode;
+    },
+    isEditAllowed() {
+      if (this.disableEdit) return false;
+      return this.$store.getters.permissions.allowViewConfig;
     },
   },
   methods: {
@@ -93,13 +98,19 @@ export default {
       this.$emit('launchItem', target);
     },
     openSettings() {
-      this.$emit('openItemSettings');
+      if (this.isEditAllowed) {
+        this.$emit('openItemSettings');
+      }
     },
     openMoveMenu() {
-      this.$emit('openMoveItemMenu');
+      if (this.isEditAllowed) {
+        this.$emit('openMoveItemMenu');
+      }
     },
     openDeleteItem() {
-      this.$emit('openDeleteItem');
+      if (this.isEditAllowed) {
+        this.$emit('openDeleteItem');
+      }
     },
   },
 };
@@ -147,6 +158,13 @@ div.context-menu {
         width: 1rem;
          margin-right: 0.5rem;
           path { fill: currentColor; }
+      }
+    }
+    &.disabled li:not(.section-title) {
+      cursor: not-allowed;
+      opacity: var(--dimming-factor);
+      &:hover {
+        background: var(--context-menu-background);
       }
     }
   }
